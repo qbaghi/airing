@@ -7,6 +7,7 @@ from __future__ import (division, print_function, absolute_import,
 __all__ = ["Sampler", "default_beta_ladder"]
 
 import numpy as np
+import pickle
 import multiprocessing as multi
 from . import util
 
@@ -147,11 +148,11 @@ class GibbsEvaluator(object):
     """
 
     def __init__(self, gibbs,
-                 loglargs=[],
-                 loglkwargs={}):
+                 gibbsargs=[],
+                 gibbskwargs={}):
         self.gibbs = gibbs
-        self.loglargs = loglargs
-        self.loglkwargs = loglkwargs
+        self.gibbsargs = gibbsargs
+        self.gibbskwargs = gibbskwargs
 
     def __call__(self, x, x2):
         """[summary]
@@ -175,9 +176,7 @@ class GibbsEvaluator(object):
         ValueError
             [description]
         """
-        x2_new = self.gibbs(x, x2, *self.loglargs, **self.loglkwargs)
-        if np.isnan(x2_new):
-            raise ValueError('Prior function returned NaN.')
+        x2_new = self.gibbs(x, x2, *self.gibbsargs, **self.gibbskwargs)
 
         return x2_new
 
@@ -191,9 +190,6 @@ class Sampler(object):
 
     :param dim:
         The dimension of parameter space.
-        
-    :param dim2:
-        The dimension of auxiliary parameter space.
 
     :param betas: (optional)
         Array giving the inverse temperatures, :math:`\\beta=1/T`, used in the ladder.  The default
@@ -210,6 +206,12 @@ class Sampler(object):
 
     :param logp:
         The log-prior function.
+
+    :param gibbs:
+        The function that updates the auxiliary parameters.
+        
+    :param dim2:
+        The dimension of auxiliary parameter space.
 
     :param threads: (optional)
         The number of parallel threads to use in sampling.
@@ -241,11 +243,13 @@ class Sampler(object):
         Time-scale for temperature dynamics.  Default: 100.
 
     """
-    def __init__(self, nwalkers, dim, dim2, logl, logp, gibbs,
+    def __init__(self, nwalkers, dim, logl, logp, 
                  ntemps=None, Tmax=None, betas=None,
+                 gibbs=callable, 
+                 dim2=None,
                  threads=1, pool=None, a=2.0,
-                 loglargs=[], logpargs=[],
-                 loglkwargs={}, logpkwargs={},
+                 loglargs=[], logpargs=[], gibbsargs=[],
+                 loglkwargs={}, logpkwargs={}, gibbskwargs={},
                  adaptation_lag=10000, adaptation_time=100,
                  random=None):
         if random is None:
@@ -255,13 +259,24 @@ class Sampler(object):
 
         self._likeprior = LikePriorEvaluator(logl, logp, loglargs, logpargs, 
                                              loglkwargs, logpkwargs)
-        self._gibbs = GibbsEvaluator(gibbs, loglargs, loglkwargs)
+        self._gibbs = GibbsEvaluator(gibbs, gibbsargs, gibbskwargs)
         self.a = a
         self.nwalkers = nwalkers
         self.dim = dim
         self.dim2 = dim2
         self.adaptation_time = adaptation_time
         self.adaptation_lag = adaptation_lag
+        
+        # For resizing in _evaluate and _aux_update functions:
+        if dim2 is not None:
+            if type(dim2) == int:
+                self.a2list = [-1, dim2]
+                self.list2a = [ntemps, nwalkers, dim2]
+            if type(dim2) == tuple or type(dim2) == list:
+                self.a2list = [-1]
+                self.a2list.extend(dim2)
+                self.list2a = [ntemps, nwalkers]
+                self.list2a.extend(dim2)
 
         # Set temperature ladder.  Append beta=0 to generated ladder.
         if betas is not None:
@@ -326,9 +341,83 @@ class Sampler(object):
         for x in self.sample(*args, **kwargs):
             pass
         return x
+    
+    def run(self, n_it, n_save, n_thin, n_update,
+            n_start_update=0, pos0=None, aux0=None, save_path='./',
+            chain_suffix='chain.p', lnprob_prefix='lnprob.p',
+            verbose=100):
+        """
+        Identical to ``run_mcmc``, but can initialize the parameter state
+        using the arguments of the prior (assumed to be parameter boundaries)
+        and draw them form a uniform distribution. 
+        Also stores the chains and log-posterior values when required.
+        
+        Parameters
+        ----------
+        n_it : int
+            maximum number of iterations
+        n_save : int
+            request to save chains to file every n_save iteration
+        n_thin : int
+            thinning number
+        n_update : int
+            The number of iterations to perform between performing update of
+            auxiliary parameters.
+        n_start_update : int
+            The number of iterations to perform before starting auxliary 
+            parmeter updates.
+        n_end_update : int
+            The number of iterations to perform before ending auxliary 
+            parmeter updates.
+        pos0 : array_like
+            initial values for parameters
+        save_path : str
+            path to save the data
+
+        Returns
+        -------
+
+        """
+
+        # Initialization of parameter values
+        if pos0 is None:
+            lo, hi = self._likeprior.logpargs
+            pos = np.random.uniform(lo, hi, 
+                                    size=(self.ntemps, self.nwalkers, len(hi)))
+        else:
+            pos = pos0[:]
+            
+        if aux0 is None:
+            print("Warining: we assume no auxiliary parameters.")
+            aux0 = np.zeros(pos.shape)
+            self.dim2 = self.dim
+
+        i = 0
+
+        for pos, aux, lnlike0, lnprob0 in self.sample(pos, aux0, n_it,
+                                                      thin=n_thin,
+                                                      aux_update=n_update,
+                                                      aux_start=n_start_update,
+                                                      storechain=True):
+
+            if ((i % n_save == 0) & (i != 0)) | (i == n_it - 1):
+                print("Save data at iteration " + str(i) + "...")
+                file_object = open(save_path + chain_suffix, "wb")
+                pickle.dump(self.chain[:, :, 0:i, :], file_object)
+                file_object.close()
+                file_object = open(save_path + lnprob_prefix, "wb")
+                pickle.dump(self.logprobability[:, :, 0:i], file_object)
+                file_object.close()
+                print("Data saved.")
+            if i % verbose == 0:
+                print("Iteration " + str(i) + " completed.")
+
+            i += 1
+
+        return pos, aux, lnlike0, lnprob0
 
     def sample(self, p0=None, aux0=None,
-               iterations=1, thin=1,
+               iterations=1, thin=1, aux_update=10, aux_start=0,
                storechain=True, adapt=False,
                swap_ratios=False):
         """
@@ -345,6 +434,10 @@ class Sampler(object):
         :param thin: (optional)
             The number of iterations to perform between saving the
             state to the internal chain.
+            
+        :param gibbs_update: (optional)
+            The number of iterations to perform between performing update of
+            auxiliary parameters.
 
         :param storechain: (optional)
             If ``True`` store the iterations in the ``chain``
@@ -482,16 +575,23 @@ class Sampler(object):
                     self._beta_history[:, isave] = self._betas
                     isave += 1
 
+            if (self._time + 1 >= aux_start) & ((self._time + 1) % aux_update == 0):
+                aux = self._update_aux(p, aux)
+
             self._time += 1
             if swap_ratios:
-                yield p, logpost, logl, ratios
+                yield p, aux, logpost, logl, ratios
             else:
-                yield p, logpost, logl
+                yield p, aux, logpost, logl
 
     def _evaluate(self, ps, ps2):
         mapf = map if self.pool is None else self.pool.map
+
+        # results = list(mapf(self._likeprior, ps.reshape((-1, self.dim)),
+        #                     ps2.reshape((-1, self.dim2))))
+
         results = list(mapf(self._likeprior, ps.reshape((-1, self.dim)),
-                            ps2.reshape((-1, self.dim))))
+                            ps2.reshape(self.a2list)))
 
         logl = np.fromiter((r[0] for r in results), np.float,
                            count=len(results)).reshape((self.ntemps, -1))
@@ -502,11 +602,18 @@ class Sampler(object):
     
     def _update_aux(self, ps, ps2):
         mapf = map if self.pool is None else self.pool.map
-        results = list(mapf(self._gibbs, ps.reshape((-1, self.dim2)),
-                            ps2.reshape((-1, self.dim2))))
+        # results = list(mapf(self._gibbs, ps.reshape((-1, self.dim)),
+        #                     ps2.reshape((-1, self.dim2))))
+        results = list(mapf(self._gibbs, ps.reshape((-1, self.dim)),
+                            ps2.reshape(self.a2list)))
 
-        ps2_new = np.fromiter((r for r in results), np.float,
-                              count=len(results)).reshape((self.ntemps, -1))
+        # ps2_new = np.fromiter((r for r in results), ps2.dtype,
+        #                       count=len(results)).reshape((self.ntemps,
+        #                                                    self.nwalkers,
+        #                                                    self.dim2))
+        # ps2_new = np.fromiter((r for r in results), ps2.dtype,
+        #                       count=len(results)).reshape(self.list2a)
+        ps2_new = np.array(results).reshape(self.list2a)
 
         return ps2_new
 
