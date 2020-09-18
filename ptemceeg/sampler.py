@@ -295,6 +295,8 @@ class Sampler(object):
         self.pool = pool
         if threads > 1 and pool is None:
             self.pool = multi.Pool(threads)
+            
+        self.mapf = map if self.pool is None else self.pool.starmap
 
         self.reset()
 
@@ -585,13 +587,17 @@ class Sampler(object):
                 yield p, aux, logpost, logl
 
     def _evaluate(self, ps, ps2):
-        mapf = map if self.pool is None else self.pool.map
-
+        
+        # mapf = map if self.pool is None else self.pool.map
         # results = list(mapf(self._likeprior, ps.reshape((-1, self.dim)),
         #                     ps2.reshape((-1, self.dim2))))
 
-        results = list(mapf(self._likeprior, ps.reshape((-1, self.dim)),
-                            ps2.reshape(self.a2list)))
+        # results = list(self.mapf(self._likeprior, ps.reshape((-1, self.dim)),
+        #                          ps2.reshape(self.a2list)))
+
+        results = list(self.mapf(self._likeprior, 
+                                 zip(ps.reshape((-1, self.dim)),
+                                     ps2.reshape(self.a2list))))
 
         logl = np.fromiter((r[0] for r in results), np.float,
                            count=len(results)).reshape((self.ntemps, -1))
@@ -601,11 +607,12 @@ class Sampler(object):
         return logl, logp
     
     def _update_aux(self, ps, ps2):
-        mapf = map if self.pool is None else self.pool.map
+        # mapf = map if self.pool is None else self.pool.map
         # results = list(mapf(self._gibbs, ps.reshape((-1, self.dim)),
         #                     ps2.reshape((-1, self.dim2))))
-        results = list(mapf(self._gibbs, ps.reshape((-1, self.dim)),
-                            ps2.reshape(self.a2list)))
+        results = list(self.mapf(self._gibbs, 
+                                 zip(ps.reshape((-1, self.dim)),
+                                     ps2.reshape(self.a2list))))
 
         # ps2_new = np.fromiter((r for r in results), ps2.dtype,
         #                       count=len(results)).reshape((self.ntemps,
