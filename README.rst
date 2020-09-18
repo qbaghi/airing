@@ -1,5 +1,5 @@
-ptemcee
-=======
+ptemceeg
+========
 
 **ptemcee** /'tɛmsiː/ (noun):
     `Adaptive parallel tempering <http://arxiv.org/abs/1501.05823>`_ meets |emcee|_.
@@ -7,7 +7,11 @@ ptemcee
 *ptemcee*, pronounced "tem-cee", is fork of Daniel Foreman-Mackey's |emcee|_ to implement parallel
 tempering more robustly.  As far as possible, it is designed as a drop-in replacement for *emcee*.
 
-If you're trying to characterise awkward, multi-modal probability distributions, then *ptemcee* is
+*ptemceeg* is a fork of Will Vousden's |ptemcee|_ to implement parallel
+tempering within a Blocked Gibbs sampler.
+
+If you're trying to characterise awkward, multi-modal probability distributions, 
+but want to sample your parameter space by blocks, then *ptemceeg* is
 your friend.
 
 .. image:: http://img.shields.io/travis/willvousden/ptemcee/master.svg?style=flat
@@ -33,7 +37,7 @@ research.
 License
 -------
 
-*ptemcee* is free software distributed under the MIT License; see the `LICENSE
+*ptemceeg* is free software distributed under the MIT License; see the `LICENSE
 <https://github.com/willvousden/ptemcee/blob/master/LICENSE>`_ file for details.
 
 .. |emcee| replace:: *emcee*
