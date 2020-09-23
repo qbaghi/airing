@@ -267,16 +267,16 @@ class Sampler(object):
         self.adaptation_time = adaptation_time
         self.adaptation_lag = adaptation_lag
         
-        # For resizing in _evaluate and _aux_update functions:
-        if dim2 is not None:
-            if type(dim2) == int:
-                self.a2list = [-1, dim2]
-                self.list2a = [ntemps, nwalkers, dim2]
-            if type(dim2) == tuple or type(dim2) == list:
-                self.a2list = [-1]
-                self.a2list.extend(dim2)
-                self.list2a = [ntemps, nwalkers]
-                self.list2a.extend(dim2)
+        # # For resizing in _evaluate and _aux_update functions:
+        # if dim2 is not None:
+        #     if type(dim2) == int:
+        #         self.a2list = [-1, dim2]
+        #         self.list2a = [ntemps, nwalkers, dim2]
+        #     if type(dim2) == tuple or type(dim2) == list:
+        #         self.a2list = [-1]
+        #         self.a2list.extend(dim2)
+        #         self.list2a = [ntemps, nwalkers]
+        #         self.list2a.extend(dim2)
 
         # Set temperature ladder.  Append beta=0 to generated ladder.
         if betas is not None:
@@ -372,12 +372,22 @@ class Sampler(object):
             The number of iterations to perform before ending auxliary 
             parmeter updates.
         pos0 : array_like
-            initial values for parameters
+            initial values for parameters, size ntemps x nwalkers x ndim
+        aux0 : array_like
+            initial values for auxiliary parameters nwalkers x ndim2
         save_path : str
             path to save the data
 
         Returns
         -------
+        pos : array_like
+            new state of parameters for all chains
+        aux : array_like
+            new state of auxiliary parameters  
+        lnlike0 : array_like 
+            updated log-likelihood value 
+        lnprob0 : array_like
+            updated log-posterior value
 
         """
 
@@ -595,9 +605,16 @@ class Sampler(object):
         # results = list(self.mapf(self._likeprior, ps.reshape((-1, self.dim)),
         #                          ps2.reshape(self.a2list)))
 
+        # results = list(self.mapf(self._likeprior, 
+        #                          zip(ps.reshape((-1, self.dim)),
+        #                              ps2.reshape(self.a2list))))
+        
+        # Replicate auxiliary parameters for temperatures
+        ps2_ext = np.full((self.ntemps, self.nwalkers, self.dim2), ps2)
+        
         results = list(self.mapf(self._likeprior, 
                                  zip(ps.reshape((-1, self.dim)),
-                                     ps2.reshape(self.a2list))))
+                                     ps2_ext.reshape((-1, self.dim2)))))
 
         logl = np.fromiter((r[0] for r in results), np.float,
                            count=len(results)).reshape((self.ntemps, -1))
@@ -610,17 +627,15 @@ class Sampler(object):
         # mapf = map if self.pool is None else self.pool.map
         # results = list(mapf(self._gibbs, ps.reshape((-1, self.dim)),
         #                     ps2.reshape((-1, self.dim2))))
+        # # Update auxiliary parameters for each walker.
+        # results = list(self.mapf(self._gibbs, 
+        #                          zip(ps[0, :, :].reshape((-1, self.dim)),
+        #                              ps2.reshape(self.a2list))))
         results = list(self.mapf(self._gibbs, 
-                                 zip(ps.reshape((-1, self.dim)),
-                                     ps2.reshape(self.a2list))))
-
-        # ps2_new = np.fromiter((r for r in results), ps2.dtype,
-        #                       count=len(results)).reshape((self.ntemps,
-        #                                                    self.nwalkers,
-        #                                                    self.dim2))
-        # ps2_new = np.fromiter((r for r in results), ps2.dtype,
-        #                       count=len(results)).reshape(self.list2a)
-        ps2_new = np.array(results).reshape(self.list2a)
+                                 zip(ps[0, :, :].reshape((-1, self.dim)),
+                                     ps2.reshape((-1, self.dim2)))))
+        # ps2_new = np.array(results).reshape(self.list2a)
+        ps2_new = np.array(results).reshape((self.nwalkers, self.dim2))
 
         return ps2_new
 
