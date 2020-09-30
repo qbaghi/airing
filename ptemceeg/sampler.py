@@ -360,7 +360,7 @@ class Sampler(object):
             lnprob_suffix='lnprob.p',
             aux_suffix='aux.p',
             storechain=True,
-            storeaux=True,
+            storeaux=False,
             verbose=100):
         """
         Identical to ``run_mcmc``, but can initialize the parameter state
@@ -438,7 +438,7 @@ class Sampler(object):
                 if storeaux:
                     file_object = open(save_path + aux_suffix, "wb")
                     pickle.dump(self.aux[:, 0:i], file_object)
-                    file_object.close()      
+                    file_object.close()
                 print("Data saved.")
             if i % verbose == 0:
                 print("Iteration " + str(i) + " completed.")
@@ -555,7 +555,7 @@ class Sampler(object):
         if storechain:
             isave = self._expand_chain(iterations // thin)
         if storeaux:
-            _ = self._expand_aux(iterations // thin)
+            isave_aux = self._expand_aux(iterations // thin, dtype=aux.dtype)
 
         for i in range(iterations):
             for j in [0, 1]:
@@ -613,6 +613,9 @@ class Sampler(object):
                 self._betas += dbetas
                 logpost += self._tempered_likelihood(logl, betas=dbetas)
 
+            if (self._time + 1 >= aux_start) & ((self._time + 1) % aux_update == 0):
+                aux = self._update_aux(p, aux)
+
             if (self._time + 1) % thin == 0:
                 if storechain:
                     self._chain[:, :, isave, :] = p
@@ -620,11 +623,8 @@ class Sampler(object):
                     self._loglikelihood[:, :, isave] = logl
                     self._beta_history[:, isave] = self._betas
                     isave += 1
-
-            if (self._time + 1 >= aux_start) & ((self._time + 1) % aux_update == 0):
-                aux = self._update_aux(p, aux)
                 if storeaux:
-                    self._aux[:, isave, :] = aux
+                    self._aux[:, isave_aux, :] = aux
 
             self._time += 1
             if swap_ratios:
@@ -810,28 +810,29 @@ class Sampler(object):
 
         return isave
 
-    def _expand_aux(self, nsave):
+    def _expand_aux(self, nsave, dtype=np.float64):
         """
         Expand ``self._aux`` ahead of run to make room for new samples.
 
         :param nsave:
             The number of additional iterations for which to make room.
 
-        :return ``isave``:
+        :return ``isave_aux``:
             Returns the index at which to begin inserting new entries.
 
         """
 
         if self._aux is None:
-            isave = 0
-            self._aux = np.zeros((self.nwalkers, nsave, self.dim2))
+            isave_aux = 0
+            self._aux = np.zeros((self.nwalkers, nsave, self.dim2),
+                                 dtype=dtype)
         else:
-            isave = self._aux.shape[2]
-            self._aux = np.concatenate((self._aux,
-                                        np.zeros((self.nwalkers,
-                                                  nsave, self.dim2))),
-                                       axis=2)
-        return isave
+            isave_aux = self._aux.shape[2]
+            self._aux = np.concatenate(
+                (self._aux,
+                 np.zeros((self.nwalkers, nsave, self.dim2), dtype=dtype)),
+                axis=2)
+        return isave_aux
 
     def log_evidence_estimate(self, logls=None, fburnin=0.1):
         """
