@@ -318,7 +318,7 @@ class Sampler(object):
 
         # Reset chain.
         self._chain = None
-        self._aux = None
+        self._auxchain = None
         self._logposterior = None
         self._loglikelihood = None
         self._beta_history = None
@@ -417,10 +417,12 @@ class Sampler(object):
             print("Warining: we assume no auxiliary parameters.")
             aux0 = np.zeros(pos.shape)
             self.dim2 = self.dim
+        else:
+            aux = aux0[:]
 
         i = 0
 
-        for pos, aux, lnlike0, lnprob0 in self.sample(pos, aux0, n_it,
+        for pos, aux, lnlike0, lnprob0 in self.sample(pos, aux, n_it,
                                                       thin=n_thin,
                                                       aux_update=n_update,
                                                       aux_start=n_start_update,
@@ -437,7 +439,7 @@ class Sampler(object):
                 file_object.close()
                 if storeaux:
                     file_object = open(save_path + aux_suffix, "wb")
-                    pickle.dump(self.aux[:, 0:i], file_object)
+                    pickle.dump(self.auxchain[:, 0:i, :], file_object)
                     file_object.close()
                 print("Data saved.")
             if i % verbose == 0:
@@ -523,8 +525,8 @@ class Sampler(object):
         # Set initial walker positions.
         if aux0 is not None:
             # Start anew.
-            self._aux0 = aux = np.array(aux0).copy()
-        elif self._p0 is not None:
+            self._aux0 = aux = np.array(aux0, dtype=aux0.dtype).copy()
+        elif self._aux0 is not None:
             # Now, where were we?
             aux = self._aux0
         else:
@@ -555,7 +557,8 @@ class Sampler(object):
         if storechain:
             isave = self._expand_chain(iterations // thin)
         if storeaux:
-            isave_aux = self._expand_aux(iterations // thin, dtype=aux.dtype)
+            isave_aux = self._expand_auxchain(iterations // thin, 
+                                              dtype=aux.dtype)
 
         for i in range(iterations):
             for j in [0, 1]:
@@ -624,7 +627,8 @@ class Sampler(object):
                     self._beta_history[:, isave] = self._betas
                     isave += 1
                 if storeaux:
-                    self._aux[:, isave_aux, :] = aux
+                    self._auxchain[:, isave_aux, :] = aux
+                    isave_aux += 1
 
             self._time += 1
             if swap_ratios:
@@ -650,13 +654,13 @@ class Sampler(object):
 
         if self.pool is None:
             results = list(self.mapf(
-                self._likeprior, 
+                self._likeprior,
                 ps.reshape((-1, self.dim)),
                 ps2_ext.reshape((-1, self.dim2))))
         else:
             results = list(self.mapf(self._likeprior,
-                                    zip(ps.reshape((-1, self.dim)),
-                                        ps2_ext.reshape((-1, self.dim2)))))
+                                     zip(ps.reshape((-1, self.dim)),
+                                         ps2_ext.reshape((-1, self.dim2)))))
 
         logl = np.fromiter((r[0] for r in results), np.float,
                            count=len(results)).reshape((self.ntemps, -1))
@@ -672,8 +676,8 @@ class Sampler(object):
                                      ps2.reshape((-1, self.dim2))))
         else:
             results = list(self.mapf(self._gibbs,
-                                    zip(ps[0, :, :].reshape((-1, self.dim)),
-                                        ps2.reshape((-1, self.dim2)))))
+                                     zip(ps[0, :, :].reshape((-1, self.dim)),
+                                         ps2.reshape((-1, self.dim2)))))
         # ps2_new = np.array(results).reshape(self.list2a)
         ps2_new = np.array(results).reshape((self.nwalkers, self.dim2))
 
@@ -681,11 +685,13 @@ class Sampler(object):
 
     def _tempered_likelihood(self, logl, betas=None):
         """
-        Compute tempered log likelihood.  This is usually a mundane multiplication, except for the
-        special case where beta == 0 *and* we're outside the likelihood support.
+        Compute tempered log likelihood.  This is usually a mundane
+        multiplication, except for the special case where beta == 0 *and* we're 
+        outside the likelihood support.
 
-        Here, we find a singularity that demands more careful attention; we allow the likelihood to
-        dominate the temperature, since wandering outside the likelihood support causes a discontinuity.
+        Here, we find a singularity that demands more careful attention; 
+        we allow the likelihood to dominate the temperature, since wandering 
+        outside the likelihood support causes a discontinuity.
 
         """
 
@@ -814,7 +820,7 @@ class Sampler(object):
 
         return isave
 
-    def _expand_aux(self, nsave, dtype=np.float64):
+    def _expand_auxchain(self, nsave, dtype=np.float64):
         """
         Expand ``self._aux`` ahead of run to make room for new samples.
 
@@ -826,16 +832,22 @@ class Sampler(object):
 
         """
 
-        if self._aux is None:
+        if self._auxchain is None:
             isave_aux = 0
-            self._aux = np.zeros((self.nwalkers, nsave, self.dim2),
-                                 dtype=dtype)
+            self._auxchain = np.zeros((self.nwalkers, nsave, self.dim2),
+                                       dtype=dtype)
         else:
-            isave_aux = self._aux.shape[2]
-            self._aux = np.concatenate(
-                (self._aux,
+            # isave = self._chain.shape[2]
+            # self._chain = np.concatenate((self._chain,
+            #                               np.zeros((self.ntemps,
+            #                                         self.nwalkers,
+            #                                         nsave, self.dim))),
+            #                              axis=2)
+            isave_aux = self._auxchain.shape[1]
+            self._auxchain = np.concatenate(
+                (self._auxchain,
                  np.zeros((self.nwalkers, nsave, self.dim2), dtype=dtype)),
-                axis=2)
+                axis=1)
         return isave_aux
 
     def log_evidence_estimate(self, logls=None, fburnin=0.1):
@@ -906,13 +918,13 @@ class Sampler(object):
         return self._chain
 
     @property
-    def aux(self):
+    def auxchain(self):
         """
         Returns the stored chain of auxiliary parameter samples;
         shape ``(Nwalkers, Nsteps, Ndim2)``.
 
         """
-        return self._aux
+        return self._auxchain
 
     @property
     def flatchain(self):
