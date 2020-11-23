@@ -420,6 +420,7 @@ class Sampler(object):
         else:
             aux = aux0[:]
 
+        # Initialize iteration counter
         i = 0
 
         for pos, aux, lnlike0, lnprob0 in self.sample(pos, aux, n_it,
@@ -431,11 +432,17 @@ class Sampler(object):
 
             if ((i % n_save == 0) & (i != 0)) | (i == n_it - 1):
                 print("Save data at iteration " + str(i) + "...")
+                # The number of saved iterations at iteration i is
+                saved_it = i // n_thin
                 file_object = open(save_path + chain_suffix, "wb")
-                pickle.dump(self.chain[:, :, 0:i, :], file_object)
+                pickle.dump(self.chain[:, :, 0:saved_it, :], file_object)
+                # pickle.dump([self.chain[:, :, n_thin-1:i:n_thin, :],
+                #              file_object)
                 file_object.close()
                 file_object = open(save_path + lnprob_suffix, "wb")
-                pickle.dump(self.logprobability[:, :, 0:i], file_object)
+                pickle.dump(self.logprobability[:, :, 0:saved_it], file_object)
+                # pickle.dump(self.logprobability[:, :, n_thin-1:i:n_thin], 
+                #             file_object)
                 file_object.close()
                 if storeaux:
                     file_object = open(save_path + aux_suffix, "wb")
