@@ -435,18 +435,21 @@ class Sampler(object):
                 # The number of saved iterations at iteration i is
                 saved_it = i // n_thin
                 file_object = open(save_path + chain_suffix, "wb")
-                pickle.dump(self.chain[:, :, 0:saved_it, :], file_object)
+                pickle.dump(self.chain[:, :, 0:saved_it, :], file_object,
+                            protocol=4)
                 # pickle.dump([self.chain[:, :, n_thin-1:i:n_thin, :],
                 #              file_object)
                 file_object.close()
                 file_object = open(save_path + lnprob_suffix, "wb")
-                pickle.dump(self.logprobability[:, :, 0:saved_it], file_object)
+                pickle.dump(self.logprobability[:, :, 0:saved_it], file_object,
+                            protocol=4)
                 # pickle.dump(self.logprobability[:, :, n_thin-1:i:n_thin], 
                 #             file_object)
                 file_object.close()
                 if storeaux:
                     file_object = open(save_path + aux_suffix, "wb")
-                    pickle.dump(self.auxchain[:, 0:i, :], file_object)
+                    pickle.dump(self.auxchain[:, 0:i, :], file_object,
+                                protocol=4)
                     file_object.close()
                 print("Data saved.")
             if i % verbose == 0:
