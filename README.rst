@@ -39,5 +39,6 @@ License
 <https://github.com/willvousden/ptemcee/blob/master/LICENSE>`_ file for details.
 
 .. |emcee| replace:: *emcee*
+.. |ptemcee| replace:: *ptemcee*
 .. _emcee: https://github.com/dfm/emcee
 .. _ptemcee: https://github.com/willvousden/ptemcee
