@@ -1,14 +1,12 @@
 ptemceeg
 ========
 
-**ptemcee** /'tɛmsiː/ (noun):
-    `Adaptive parallel tempering <http://arxiv.org/abs/1501.05823>`_ meets |emcee|_.
+*ptemceeg* is a fork of Will Vousden's |ptemcee|_ to implement parallel
+tempering within a Blocked Gibbs sampler. It is based on 
 
 *ptemcee*, pronounced "tem-cee", is fork of Daniel Foreman-Mackey's |emcee|_ to implement parallel
 tempering more robustly.  As far as possible, it is designed as a drop-in replacement for *emcee*.
-
-*ptemceeg* is a fork of Will Vousden's |ptemcee|_ to implement parallel
-tempering within a Blocked Gibbs sampler.
+See <http://arxiv.org/abs/1501.05823>.
 
 If you're trying to characterise awkward, multi-modal probability distributions, 
 but want to sample your parameter space by blocks, then *ptemceeg* is
@@ -42,3 +40,4 @@ License
 
 .. |emcee| replace:: *emcee*
 .. _emcee: https://github.com/dfm/emcee
+.. _ptemcee: https://github.com/willvousden/ptemcee
