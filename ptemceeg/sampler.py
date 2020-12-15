@@ -647,7 +647,21 @@ class Sampler(object):
                 yield p, aux, logpost, logl
 
     def _evaluate(self, ps, ps2):
+        """
+        Update primary parameters
 
+        Parameters
+        ----------
+        ps : ndarray
+            primary parameter vector fo size ntemps x nwalkers x ndim
+        ps2 : ndarray
+            secondary parameter vector fo size nwalkers x ndim
+
+        Returns
+        -------
+        logl, logp : floats
+            loglikelihood and log-prior values
+        """
         # mapf = map if self.pool is None else self.pool.map
         # results = list(mapf(self._likeprior, ps.reshape((-1, self.dim)),
         #                     ps2.reshape((-1, self.dim2))))
@@ -668,9 +682,14 @@ class Sampler(object):
                 ps.reshape((-1, self.dim)),
                 ps2_ext.reshape((-1, self.dim2))))
         else:
+            # results = list(self.mapf(self._likeprior,
+            #                          zip(ps.reshape((-1, self.dim)),
+            #                              ps2_ext.reshape((-1, self.dim2)))))
+            # To work with ray, you have to convert zip explicitely to a list:
             results = list(self.mapf(self._likeprior,
-                                     zip(ps.reshape((-1, self.dim)),
-                                         ps2_ext.reshape((-1, self.dim2)))))
+                                     list(zip(ps.reshape((-1, self.dim)),
+                                              ps2_ext.reshape((-1, self.dim2)))
+                                          )))
 
         logl = np.fromiter((r[0] for r in results), np.float,
                            count=len(results)).reshape((self.ntemps, -1))
@@ -680,15 +699,39 @@ class Sampler(object):
         return logl, logp
 
     def _update_aux(self, ps, ps2):
+        """
+        Update auxiliary parameters
+
+        Parameters
+        ----------
+        ps : ndarray
+            primary parameter vector fo size ntemps x nwalkers x ndim
+        ps2 : ndarray
+            secondary parameter vector fo size nwalkers x ndim2
+
+        Returns
+        -------
+        ps2_new : ndarray
+            udpated secondary parameter vector fo size nwalkers x ndim
+        """
+
+        # Update with parameters at T = 0
+        ps0 = ps[0, :, :]
+        
         # mapf = map if self.pool is None else self.pool.map
         if self.pool is None:
-            results = list(self.mapf(self._gibbs, ps.reshape((-1, self.dim)),
+            results = list(self.mapf(self._gibbs, 
+                                     ps0.reshape((-1, self.dim)),
                                      ps2.reshape((-1, self.dim2))))
         else:
+            # results = list(self.mapf(self._gibbs,
+            #                          zip(ps0.reshape((-1, self.dim)),
+            #                              ps2.reshape((-1, self.dim2)))))
+            # To work with ray, you have to convert zip explicitely to a list:
             results = list(self.mapf(self._gibbs,
-                                     zip(ps[0, :, :].reshape((-1, self.dim)),
-                                         ps2.reshape((-1, self.dim2)))))
-        # ps2_new = np.array(results).reshape(self.list2a)
+                                     list(zip(ps0.reshape((-1, self.dim)),
+                                              ps2.reshape((-1, self.dim2))))))
+        
         ps2_new = np.array(results).reshape((self.nwalkers, self.dim2))
 
         return ps2_new
