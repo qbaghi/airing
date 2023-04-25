@@ -18,11 +18,11 @@ def read(filename):
     with open(filename, **kwargs) as f:
         return f.read()
 
-name = 'ptemceeg'
+name = 'airing'
 
 # Get current version.
 pattern = re.compile('__version__\s*=\s*(\'|")(.*?)(\'|")')
-initPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ptemceeg/__init__.py')
+initPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'airing/__init__.py')
 version = pattern.findall(read(initPath))[0][1]
 
 setup(
@@ -30,9 +30,9 @@ setup(
     version=version,
     author='Quentin Baghi',
     author_email='quentin.baghi@protonmail.com',
-    packages=['ptemceeg'],
-    url='https://github.com/qbaghi/ptemceeg',
-    download_url='https://github.com/qbaghi/ptemceeg/tarball/' + version,
+    packages=['airing'],
+    url='https://github.com/qbaghi/airing',
+    download_url='https://github.com/qbaghi/airing/tarball/' + version,
     license='MIT',
     description='Parallel-tempered emcee within Gibbs.',
     long_description=read('README.rst'),
