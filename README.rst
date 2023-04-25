@@ -16,9 +16,9 @@ Quick start
 *ptemceeg* is used very similarly as *ptemcee*. The only difference is that there are extra arguments to set when instantiating the sampler.
 These extra arguments are the following:
 
-* the Gibbs sampler
+* the secondary sampler
 * the dimension of the second parameter block
-* the extra arguments and keyword arguments of the Gibbs sampler
+* the extra arguments and keyword arguments of the secondary sampler
 
 License
 -------
